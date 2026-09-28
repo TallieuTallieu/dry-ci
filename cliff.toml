@@ -1,0 +1,108 @@
+# Shared git-cliff configuration for dry packages.
+#
+# bin/release passes --tag-pattern per repo (tag prefix), so the pattern below
+# is only the default for bare tags. Pre-release tags (-beta.N, -alpha.N) never
+# match, so their commits fold into the next stable release.
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this package are documented in this file. Versions
+follow [Semantic Versioning](https://semver.org). New entries are generated from
+commit messages by [dry-ci](https://github.com/TallieuTallieu/dry-ci); past
+entries may be edited by hand.
+
+"""
+body = """
+{%- macro entry(commit) -%}
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | split(pat="\n") | first | trim | upper_first }}
+{% endmacro -%}
+
+{% if version -%}
+## {{ version }} - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+## Unreleased
+{% endif %}
+{%- set breaking = commits | filter(attribute="breaking", value=true) %}
+{%- if breaking | length > 0 %}
+### Breaking changes
+
+{% for commit in breaking -%}
+{{ self::entry(commit=commit) }}
+{%- endfor %}
+{%- endif %}
+{%- if commits | length == 0 %}
+
+No notable changes.
+{%- endif %}
+{%- for group, commits in commits | filter(attribute="breaking", value=false) | group_by(attribute="group") %}
+
+### {{ group | striptags | trim }}
+
+{% for commit in commits -%}
+{{ self::entry(commit=commit) }}
+{%- endfor %}
+{%- endfor %}
+
+"""
+trim = true
+postprocessors = [
+  { pattern = '\n{3,}', replace = "\n\n" },
+  # Link Shortcut stories: sc-1234 or [sc-1234].
+  { pattern = '\[?\b(sc-(\d+))\b\]?', replace = "[$1](https://app.shortcut.com/tallieu--tallieu/story/$2)" },
+]
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+sort_commits = "oldest"
+tag_pattern = '^[0-9]+\.[0-9]+\.[0-9]+$'
+
+commit_preprocessors = [
+  # Merges that never describe a change of their own: release PRs from a
+  # long-lived branch and "sync" merges into feature branches.
+  { pattern = '^Merged in (dev|develop|main|master) \(pull request #\d+\)[\s\S]*', replace = "dry-ci-skip" },
+  { pattern = '^Merged? (dev|develop|main|master) into [\s\S]*', replace = "dry-ci-skip" },
+  { pattern = "^Merge (remote-tracking )?branch '[\\s\\S]*", replace = "dry-ci-skip" },
+  # Bitbucket merge / squash commits: "Merged in <branch> (pull request #N)",
+  # a blank line, then the PR title. Keep the title, and the story id from the
+  # branch name when there is one.
+  { pattern = '^Merged in [^\n]*?\b(sc-\d+)[^\n]*\n\s*\n([^\n]+)', replace = "${2} (${1})" },
+  { pattern = '^Merged in [^\n]*\n\s*\n', replace = "" },
+  # A title that already names the story: keep only the id appended above.
+  { pattern = '\s*\[sc-\d+\]([^\n]*\(sc-\d+\))', replace = "$1" },
+  # Bitbucket's default PR title is the branch name: "Feature/sc 9788  dry3 restart …".
+  { pattern = '^(?i:feature|bug|chore|fix|hotfix)/(sc \d+\s+)?', replace = "" },
+  { pattern = '^(?i:dry ?v?3)\s+', replace = "" },
+  # GitHub merge commits: "Merge pull request #N from <branch>", then the title.
+  { pattern = '^Merge pull request #\d+ from [^\n]*\n\s*\n', replace = "" },
+]
+
+commit_parsers = [
+  # Unit of a changelog entry. bin/release --unit pr flips this rule to skip
+  # non-merge commits instead, so each merged PR becomes one entry.
+  { field = "merge_commit", pattern = "true", skip = true }, # dry-ci:unit
+  { message = "^dry-ci-skip", skip = true },
+  # Noise that changes nothing for consumers' reading of the changelog.
+  { message = '^chore\(release\)', skip = true },
+  { message = '^chore\((build|format)\)', skip = true },
+  { message = '^build(\(|:)', skip = true },
+  { message = '^style(\(|:)', skip = true },
+  { message = '(?i)rebuild.*assets', skip = true },
+  { message = '(?i)prettier', skip = true },
+  { message = '(?i)phpstan.*baseline', skip = true },
+  { message = '(?i)^(wip|typo|tmp)\b', skip = true },
+  # Groups; the HTML comment fixes their order and is stripped on output.
+  { message = '^feat', group = "<!-- 0 -->Features" },
+  { message = '^fix', group = "<!-- 1 -->Fixes" },
+  { message = '^perf', group = "<!-- 1 -->Fixes" },
+  { message = '.*', group = "<!-- 2 -->Other changes" },
+]
+
+[bump]
+features_always_bump_minor = true
+breaking_always_bump_major = true

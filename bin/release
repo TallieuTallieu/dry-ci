@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# Release the current branch: compute the next version from the commits since
+# the latest stable tag, prepend it to CHANGELOG.md, commit, tag and push.
+#
+# Runs the same way on GitHub Actions, Bitbucket Pipelines and a laptop.
+# Exits 0 without doing anything when there is nothing to release.
+set -euo pipefail
+
+DRY_CI_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+usage() {
+  cat <<'EOF'
+Usage: release [options]
+
+  --tag-prefix PREFIX   Prefix of version tags, e.g. "v" (default: none)
+  --unit commit|pr      One changelog entry per commit (default) or per merged PR
+  --branch NAME         Branch to push the release commit to (default: current)
+  --notes-file PATH     Also write this release's notes (no header) to PATH
+  --dry-run             Print the next version and its notes; change nothing
+  --no-push             Commit and tag locally, but don't push
+  -h, --help            Show this help
+
+Environment:
+  GIT_CLIFF             git-cliff binary to use (default: git-cliff on PATH)
+EOF
+}
+
+tag_prefix=""
+unit="commit"
+branch=""
+notes_file=""
+dry_run=false
+push=true
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tag-prefix) tag_prefix="$2"; shift 2 ;;
+    --unit) unit="$2"; shift 2 ;;
+    --branch) branch="$2"; shift 2 ;;
+    --notes-file) notes_file="$2"; shift 2 ;;
+    --dry-run) dry_run=true; shift ;;
+    --no-push) push=false; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "release: unknown option $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+log() { echo "release: $*" >&2; }
+die() { log "$*"; exit 1; }
+
+git_cliff="${GIT_CLIFF:-git-cliff}"
+command -v "$git_cliff" >/dev/null || die "git-cliff not found; run bin/install-git-cliff or set GIT_CLIFF"
+
+config="$DRY_CI_ROOT/cliff.toml"
+case "$unit" in
+  commit) ;;
+  pr)
+    # Flip the unit rule: skip non-merge commits instead of merge commits.
+    # git-cliff only reads a config file whose name ends in .toml.
+    pr_dir="$(mktemp -d "${TMPDIR:-/tmp}/dry-ci.XXXXXX")"
+    trap 'rm -rf "$pr_dir"' EXIT
+    sed 's/pattern = "true", skip = true }, # dry-ci:unit/pattern = "false", skip = true }, # dry-ci:unit/' \
+      "$config" > "$pr_dir/cliff.toml"
+    config="$pr_dir/cliff.toml"
+    ;;
+  *) die "--unit must be commit or pr, got '$unit'" ;;
+esac
+
+# CI clones are often shallow; the version needs every tag and its history.
+if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
+  log "unshallowing clone"
+  git fetch --quiet --unshallow --tags
+else
+  git fetch --quiet --tags 2>/dev/null || log "could not fetch tags; using local tags"
+fi
+
+prefix_re="$(printf '%s' "$tag_prefix" | sed 's/[.[\*^$()+?{|/]/\\&/g')"
+tag_pattern="^${prefix_re}[0-9]+\\.[0-9]+\\.[0-9]+\$"
+cliff() { RUST_LOG=warn "$git_cliff" --config "$config" --tag-pattern "$tag_pattern" "$@"; }
+
+latest="$(git tag --list | grep -E "$tag_pattern" | sort -V | tail -n 1 || true)"
+[[ -n "$latest" ]] || die "no stable tag matching $tag_pattern; tag the first release by hand"
+
+if git tag --points-at HEAD | grep -qE "$tag_pattern"; then
+  log "HEAD is already released as $(git tag --points-at HEAD | grep -E "$tag_pattern" | head -n 1)"
+  exit 0
+fi
+
+pending="$(git rev-list --count "$latest"..HEAD)"
+if [[ "$pending" -eq 0 ]]; then
+  log "no commits since $latest"
+  exit 0
+fi
+
+next="$(cliff --bumped-version)"
+# git-cliff only bumps for commits it keeps; a release of nothing but skipped
+# changes (e.g. rebuilt assets) is still a release, so bump the patch here.
+if [[ "$next" == "$latest" ]]; then
+  IFS=. read -r major minor patch <<< "${latest#"$tag_prefix"}"
+  next="${tag_prefix}${major}.${minor}.$((patch + 1))"
+fi
+[[ "$next" =~ $tag_pattern ]] || die "computed version '$next' does not match $tag_pattern"
+
+log "$latest -> $next ($pending commits)"
+
+if [[ "$dry_run" == true ]]; then
+  echo "$next"
+  cliff --unreleased --tag "$next" --strip all
+  exit 0
+fi
+
+git config user.name >/dev/null || git config user.name "dry-ci"
+git config user.email >/dev/null || git config user.email "dry-ci@users.noreply.github.com"
+
+if [[ -f CHANGELOG.md ]]; then
+  cliff --unreleased --tag "$next" --prepend CHANGELOG.md
+else
+  cliff --unreleased --tag "$next" --output CHANGELOG.md
+fi
+
+if [[ -n "$notes_file" ]]; then
+  cliff --unreleased --tag "$next" --strip all > "$notes_file"
+fi
+
+git add CHANGELOG.md
+git commit --quiet -m "chore(release): $next [skip ci]"
+git tag "$next"
+log "committed and tagged $next"
+
+if [[ "$push" == true ]]; then
+  branch="${branch:-$(git symbolic-ref --short -q HEAD || true)}"
+  [[ -n "$branch" ]] || die "detached HEAD; pass --branch"
+  git push --atomic origin "HEAD:refs/heads/$branch" "refs/tags/$next"
+  log "pushed $next to $branch"
+fi
+
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  echo "version=$next" >> "$GITHUB_OUTPUT"
+fi
+echo "$next"
