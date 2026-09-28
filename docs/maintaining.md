@@ -15,6 +15,7 @@ to the packages.
 | [`.github/workflows/php-package.yml`](../.github/workflows/php-package.yml) | The reusable workflow GitHub packages call                        |
 | [`bitbucket/bitbucket-pipelines.yml`](../bitbucket/bitbucket-pipelines.yml) | The template Bitbucket packages copy                              |
 | [`examples/github-ci.yml`](../examples/github-ci.yml)                  | The thin caller a GitHub package copies                               |
+| [`docker/php/Dockerfile`](../docker/php/Dockerfile)                    | The CI image Bitbucket steps run in                                   |
 | [`tests/release.test.sh`](../tests/release.test.sh)                    | Scenario tests for `bin/release` and `cliff.toml`                     |
 
 Everything a package runs is in `bin/`, so both hosts run the same commands. The workflow and
@@ -64,6 +65,23 @@ git push origin v1.2.0 && git push -f origin v1
 
 Moving `v1` affects every package at its next run, so check the change with `--dry-run`
 against one or two packages first.
+
+## The CI image
+
+Bitbucket steps run in `ghcr.io/tallieutallieu/dry-ci-php:8.4`, built from
+[`docker/php/Dockerfile`](../docker/php/Dockerfile): PHP 8.4 CLI with git, unzip, Composer, `gd`,
+`exif`, `imagick` and `zip`. Compiling those extensions on every run took about two minutes;
+with the image, a step starts with the image pull. GitHub packages don't use it: `setup-php`
+installs prebuilt extensions quickly.
+
+The [image workflow](../.github/workflows/image.yml) builds it on a change to `docker/`, every
+Monday for PHP and Debian security patches, and on demand (Actions → image → Run workflow). Each
+build also gets an `8.4-<commit>` tag, to pin or roll back a package.
+
+The package must stay **public** (GitHub → the organisation's Packages → `dry-ci-php` → Package
+settings → Change visibility), so Bitbucket pulls it without credentials. A package that needs
+one more extension installs it in its own step with `install-php-extensions <name>`, which the
+image keeps.
 
 ## Updating git-cliff
 
