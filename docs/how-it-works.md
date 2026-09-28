@@ -18,9 +18,14 @@ release, and how the changelog is written.
   | `prettier` | `prettier --check .` with the locked Prettier  | no `prettier` in `package.json`     |
   | `phpstan`  | PHPStan with the package's own `phpstan.neon` | no `phpstan.neon`                   |
   | `pest`     | Pest                                          | no `tests/` directory               |
+  | `audit`    | `composer audit` (security advisories)        | never                               |
 
   PHP 8.4, Node LTS. PHPStan's level and baseline stay per package. A skipped check shows a
   warning, not a failure.
+
+  The audit fails on known security advisories and only reports abandoned packages. It never
+  holds back a release: a new advisory in a dependency shows as a failed check, but the release
+  on merge doesn't wait for it (on Bitbucket the audit only runs on pull requests).
 
   The Prettier check installs only the `package.json` dependencies with "prettier" in their name
   (Prettier and its plugins), at the versions in `yarn.lock`, instead of the whole project; it

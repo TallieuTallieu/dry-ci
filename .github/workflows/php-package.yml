@@ -1,7 +1,9 @@
 # Reusable CI + release workflow for a dry PHP package. See README.md.
 #
-# On pull requests: PR-title lint, composer, Prettier, PHPStan and Pest.
-# On a push to the default branch: the same checks, then bin/release.
+# On pull requests: PR-title lint, composer, Prettier, PHPStan, Pest and composer audit.
+# On a push to the default branch: the same checks, then bin/release. The release
+# doesn't wait for the audit: a new advisory in a dependency shows as a failed
+# check but doesn't hold back unrelated releases.
 name: dry-ci
 
 on:
@@ -104,6 +106,41 @@ jobs:
         env:
           DRY_CI_PEST_ARGS: ${{ inputs.pest-args }}
         run: $RUNNER_TEMP/dry-ci/bin/check ${{ matrix.check }}
+
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: TallieuTallieu/dry-ci
+          ref: ${{ inputs.dry-ci-ref }}
+          path: .dry-ci
+      - run: mv .dry-ci "$RUNNER_TEMP/dry-ci"
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: ${{ inputs.php-extensions }}
+          tools: composer
+          coverage: none
+      - name: Load Bitbucket SSH key
+        env:
+          BITBUCKET_SSH_KEY: ${{ secrets.BITBUCKET_SSH_KEY }}
+        if: env.BITBUCKET_SSH_KEY != ''
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          ssh-add - <<< "$BITBUCKET_SSH_KEY"
+          ssh-keyscan bitbucket.org >> ~/.ssh/known_hosts
+      - name: composer
+        env:
+          DRY_CI_COMPOSER_ARGS: ${{ inputs.composer-args }}
+        run: $RUNNER_TEMP/dry-ci/bin/check composer
+      - run: $RUNNER_TEMP/dry-ci/bin/check audit
 
   prettier:
     runs-on: ubuntu-latest

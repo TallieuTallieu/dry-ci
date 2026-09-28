@@ -39,6 +39,15 @@ definitions:
           - /opt/dry-ci/bin/check composer
           - /opt/dry-ci/bin/check phpstan
           - /opt/dry-ci/bin/check pest
+    - step: &audit
+        name: composer audit
+        image: ghcr.io/tallieutallieu/dry-ci-php:8.4
+        caches:
+          - composer
+        script:
+          - *fetch-dry-ci
+          - /opt/dry-ci/bin/check composer
+          - /opt/dry-ci/bin/check audit
     - step: &prettier
         name: Prettier
         image: node:lts
@@ -67,7 +76,10 @@ pipelines:
       - parallel:
           - step: *pr-title
           - step: *php
+          - step: *audit
           - step: *prettier
+  # The default branch skips the audit: a new advisory in a dependency would
+  # otherwise block every release until the dependency is updated.
   branches:
     # Adjust: the default branch.
     main:

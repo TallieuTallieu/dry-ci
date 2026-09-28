@@ -6,6 +6,7 @@
 #        check prettier   prettier --check on the whole repo, with the locked Prettier
 #        check phpstan    PHPStan with the repo's own phpstan.neon (level, baseline)
 #        check pest       Pest, when the repo has tests
+#        check audit      composer audit: known security advisories (after `check composer`)
 #
 # Environment (shell-quoted, like a command line):
 #   DRY_CI_COMPOSER_ARGS  extra `composer install` arguments
@@ -81,10 +82,16 @@ check_pest() {
   vendor/bin/pest ${args[@]+"${args[@]}"}
 }
 
+check_audit() {
+  # Fails on security advisories only; abandoned packages are reported, not failed.
+  composer audit --locked --no-interaction --abandoned=report
+}
+
 case "${1:-}" in
   composer) check_composer ;;
+  audit) check_audit ;;
   prettier) check_prettier ;;
   phpstan) check_phpstan ;;
   pest) check_pest ;;
-  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
