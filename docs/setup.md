@@ -151,10 +151,9 @@ Repository settings → Pipelines → Repository variables:
 
 - Name `DRY_CI_BITBUCKET_TOKEN`, value the token, **Secured** ✅
 
-Optional, only if some tests can't run in CI: `DRY_CI_PEST_ARGS`, e.g.
-`--filter='/^(?!.*(GDTransformer|UploadMimetype|UploadValidation)).*$/'` (the filter dry3 uses
-today). Try without it first: the dry-ci template installs `gd`, `exif` and `imagick`, which is
-probably why those tests were excluded.
+Optional, only if some tests can't run in CI: `DRY_CI_PEST_ARGS`, e.g. `--filter='/^(?!.*Slow).*$/'`.
+dry3 needs none: all its tests pass in dry-ci's CI image, which has `gd`, `exif`, `imagick` and
+`zip`.
 
 ### 4. Branch restrictions
 
@@ -170,8 +169,9 @@ On a new branch from `main`:
 
 1. **Replace `bitbucket-pipelines.yml`** with
    [`bitbucket/bitbucket-pipelines.yml`](../bitbucket/bitbucket-pipelines.yml). For dry3 the
-   marked lines stay as they are: `--tag-prefix v`, extensions `gd exif imagick zip`, branch
-   `main`. The `dev` branch pipeline goes away.
+   marked lines stay as they are: `--tag-prefix v`, branch `main`, and no extra PHP extensions
+   (the CI image `ghcr.io/tallieutallieu/dry-ci-php:8.4` already has what dry needs). The `dev`
+   branch pipeline goes away.
 2. **Delete `.bitbucket/tag.sh`, `.bitbucket/prettier-check.sh` and
    `.bitbucket/phpstan-check.sh`**; `bin/check` and `bin/release` replace them.
 3. **Check `CHANGELOG.md`** against the latest tag, as in [Before you start](#before-you-start).
@@ -196,7 +196,7 @@ dry (directly or through dry-ecommerce) needs dry's `imagick`, `gd` and `exif`.
 
 | Package | Host | Branch | Tag prefix | Extensions | `BITBUCKET_SSH_KEY` | Changelog to add | Also |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| dry3 | Bitbucket | `main` | `v` | in template | – | v4.2.1, if the old pipeline tagged it | Remove `.bitbucket/` scripts; then drop `dev` |
+| dry3 | Bitbucket | `main` | `v` | in the CI image | – | v4.2.1, if the old pipeline tagged it | Remove `.bitbucket/` scripts; then drop `dev` |
 | oak | GitHub | `master` | – | – | – | 4.2.1 | |
 | oak-wishlist | GitHub | `master` | – | `imagick, gd, exif` | yes | – | No workflows yet |
 | dry-accounts | GitHub | `master` | – | `imagick, gd, exif` | yes | – | No tests: Pest is skipped |

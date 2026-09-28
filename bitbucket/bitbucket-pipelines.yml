@@ -13,7 +13,7 @@ definitions:
   steps:
     - step: &pr-title
         name: PR title
-        image: php:8.4-cli
+        image: ghcr.io/tallieutallieu/dry-ci-php:8.4
         script:
           # Pinned to dry-ci's v1 tag; later steps reuse this line.
           - &fetch-dry-ci >-
@@ -23,16 +23,14 @@ definitions:
           - /opt/dry-ci/bin/lint-pr-title --bitbucket
     - step: &php
         name: PHPStan + Pest
-        image: php:8.4-cli
+        # dry-ci's CI image: PHP 8.4 with Composer, gd, exif, imagick and zip.
+        image: ghcr.io/tallieutallieu/dry-ci-php:8.4
         caches:
           - composer
         script:
           - *fetch-dry-ci
-          - apt-get update -qq && apt-get install -y -qq git unzip > /dev/null
-          - curl -fsSL -o /usr/local/bin/install-php-extensions https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions
-          - chmod +x /usr/local/bin/install-php-extensions
-          # Adjust: the PHP extensions the package needs.
-          - install-php-extensions @composer gd exif imagick zip
+          # Adjust: only if the package needs another PHP extension, e.g.
+          # - install-php-extensions intl
           - /opt/dry-ci/bin/check composer
           - /opt/dry-ci/bin/check phpstan
           - /opt/dry-ci/bin/check pest
@@ -46,7 +44,7 @@ definitions:
           - /opt/dry-ci/bin/check prettier
     - step: &release
         name: Release
-        image: atlassian/default-image:4
+        image: ghcr.io/tallieutallieu/dry-ci-php:8.4
         script:
           - *fetch-dry-ci
           - export GIT_CLIFF="$(/opt/dry-ci/bin/install-git-cliff /opt/bin)"
