@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# The standard checks for a dry package, one per subcommand, so GitHub Actions
+# and Bitbucket Pipelines run exactly the same commands.
+#
+# Usage: check composer   validate composer.json and install dependencies
+#        check prettier   yarn install + prettier --check on the whole repo
+#        check phpstan    PHPStan with the repo's own phpstan.neon (level, baseline)
+#        check pest       Pest, when the repo has tests
+#
+# Environment (shell-quoted, like a command line):
+#   DRY_CI_COMPOSER_ARGS  extra `composer install` arguments
+#   DRY_CI_PEST_ARGS      extra Pest arguments, e.g. --filter='/^(?!.*GD).*$/'
+set -euo pipefail
+
+warn() {
+  if [[ -n "${GITHUB_ACTIONS:-}" ]]; then echo "::warning::$*"; else echo "warning: $*" >&2; fi
+}
+
+check_composer() {
+  # Not --strict: exact-version pins in require would fail it.
+  composer validate --no-check-publish
+  eval "set -- ${DRY_CI_COMPOSER_ARGS:-}"
+  composer install --prefer-dist --no-progress --no-interaction "$@"
+}
+
+check_prettier() {
+  if [[ ! -f package.json ]] || ! grep -q '"prettier"' package.json; then
+    warn "no prettier in package.json; skipping the formatting check"
+    return 0
+  fi
+  corepack enable
+  yarn install --immutable
+  yarn prettier --check --ignore-unknown .
+}
+
+check_phpstan() {
+  if [[ ! -f phpstan.neon && ! -f phpstan.neon.dist && ! -f phpstan.dist.neon ]]; then
+    warn "no phpstan.neon; skipping static analysis"
+    return 0
+  fi
+  [[ -x vendor/bin/phpstan ]] || { echo "vendor/bin/phpstan missing; require phpstan/phpstan in require-dev" >&2; exit 1; }
+  vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+}
+
+check_pest() {
+  if [[ ! -d tests ]]; then
+    echo "no tests directory; skipping Pest"
+    return 0
+  fi
+  [[ -x vendor/bin/pest ]] || { echo "vendor/bin/pest missing; require pestphp/pest in require-dev" >&2; exit 1; }
+  eval "set -- ${DRY_CI_PEST_ARGS:-}"
+  vendor/bin/pest "$@"
+}
+
+case "${1:-}" in
+  composer) check_composer ;;
+  prettier) check_prettier ;;
+  phpstan) check_phpstan ;;
+  pest) check_pest ;;
+  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

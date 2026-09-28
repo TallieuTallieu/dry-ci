@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Check that a pull request title is a Conventional Commit subject, because the
+# squash-merged title is what bin/release reads to pick the version bump.
+#
+# Usage: lint-pr-title "feat(orm): add a thing"
+#        lint-pr-title --bitbucket   # read the title of $BITBUCKET_PR_ID via the API
+#
+# --bitbucket needs a repository access token with "Pull requests: Read" in
+# DRY_CI_BITBUCKET_TOKEN.
+set -euo pipefail
+
+TYPES="feat|fix|perf|refactor|docs|test|build|ci|chore|style|revert"
+
+bitbucket_title() {
+  : "${BITBUCKET_PR_ID:?not a pull request pipeline}"
+  : "${BITBUCKET_REPO_FULL_NAME:?}"
+  : "${DRY_CI_BITBUCKET_TOKEN:?set a repository access token in DRY_CI_BITBUCKET_TOKEN}"
+  local json
+  json="$(curl -fsSL -H "Authorization: Bearer $DRY_CI_BITBUCKET_TOKEN" \
+    "https://api.bitbucket.org/2.0/repositories/$BITBUCKET_REPO_FULL_NAME/pullrequests/$BITBUCKET_PR_ID")"
+  if command -v python3 >/dev/null; then
+    python3 -c 'import json, sys; print(json.load(sys.stdin)["title"])' <<< "$json"
+  else
+    php -r 'echo json_decode(stream_get_contents(STDIN), true)["title"], "\n";' <<< "$json"
+  fi
+}
+
+case "${1:-}" in
+  --bitbucket) title="$(bitbucket_title)" ;;
+  "" | -h | --help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) title="$1" ;;
+esac
+
+if [[ "$title" =~ ^($TYPES)(\([^\)]+\))?!?:\ [^[:space:]] ]]; then
+  echo "PR title ok: $title"
+  exit 0
+fi
+
+cat >&2 <<EOF
+PR title is not a Conventional Commit subject:
+
+  $title
+
+Use "<type>(<optional scope>): <description>", with ! before the colon for a
+breaking change. Types: ${TYPES//|/, }.
+  feat(orm): add record subpages        -> minor release
+  fix: keep 2FA trust on logout         -> patch release
+  feat(admin)!: drop the legacy sidebar -> major release
+EOF
+exit 1
