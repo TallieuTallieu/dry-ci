@@ -1,0 +1,19 @@
+# .github/workflows/ci.yml in a GitHub-hosted dry package.
+name: CI
+
+on:
+  pull_request:
+    # "edited" re-runs the PR-title check when the title changes.
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches: [master]
+
+jobs:
+  dry-ci:
+    uses: TallieuTallieu/dry-ci/.github/workflows/php-package.yml@v1
+    permissions:
+      contents: write
+    with:
+      php-extensions: imagick
+    # BITBUCKET_SSH_KEY (private dry3 dependency) and RELEASE_TOKEN, when set.
+    secrets: inherit

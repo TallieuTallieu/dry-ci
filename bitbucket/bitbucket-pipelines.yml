@@ -1,0 +1,72 @@
+# dry-ci for a Bitbucket-hosted dry package. Copy to the package root as
+# bitbucket-pipelines.yml and adjust the three marked lines. All logic lives in
+# dry-ci's bin/ scripts; this file only wires them to Bitbucket.
+#
+# Repository variable (secured): DRY_CI_BITBUCKET_TOKEN, a repository access
+# token with "Pull requests: Read" and "Repositories: Write", allowed to push to
+# main past its branch restrictions.
+
+clone:
+  depth: full
+
+definitions:
+  steps:
+    - step: &pr-title
+        name: PR title
+        image: php:8.4-cli
+        script:
+          # Pinned to dry-ci's v1 tag; later steps reuse this line.
+          - &fetch-dry-ci >-
+            mkdir -p /opt/dry-ci &&
+            curl -fsSL https://github.com/TallieuTallieu/dry-ci/archive/refs/tags/v1.tar.gz
+            | tar -xz --strip-components=1 -C /opt/dry-ci
+          - /opt/dry-ci/bin/lint-pr-title --bitbucket
+    - step: &php
+        name: PHPStan + Pest
+        image: php:8.4-cli
+        caches:
+          - composer
+        script:
+          - *fetch-dry-ci
+          - apt-get update -qq && apt-get install -y -qq git unzip > /dev/null
+          - curl -fsSL -o /usr/local/bin/install-php-extensions https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions
+          - chmod +x /usr/local/bin/install-php-extensions
+          # Adjust: the PHP extensions the package needs.
+          - install-php-extensions @composer gd exif imagick zip
+          - /opt/dry-ci/bin/check composer
+          - /opt/dry-ci/bin/check phpstan
+          - /opt/dry-ci/bin/check pest
+    - step: &prettier
+        name: Prettier
+        image: node:lts
+        caches:
+          - node
+        script:
+          - *fetch-dry-ci
+          - /opt/dry-ci/bin/check prettier
+    - step: &release
+        name: Release
+        image: atlassian/default-image:4
+        script:
+          - *fetch-dry-ci
+          - export GIT_CLIFF="$(/opt/dry-ci/bin/install-git-cliff /opt/bin)"
+          - git remote set-url origin "https://x-token-auth:${DRY_CI_BITBUCKET_TOKEN}@bitbucket.org/${BITBUCKET_REPO_FULL_NAME}.git"
+          - git config user.name "dry-ci"
+          - git config user.email "dry-ci@users.noreply.github.com"
+          # Adjust: --tag-prefix v for vX.Y.Z tags; --unit pr for one entry per merged PR.
+          - /opt/dry-ci/bin/release --tag-prefix v --branch "$BITBUCKET_BRANCH"
+
+pipelines:
+  pull-requests:
+    '**':
+      - parallel:
+          - step: *pr-title
+          - step: *php
+          - step: *prettier
+  branches:
+    # Adjust: the default branch.
+    main:
+      - parallel:
+          - step: *php
+          - step: *prettier
+      - step: *release

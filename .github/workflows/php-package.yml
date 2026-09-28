@@ -1,0 +1,166 @@
+# Reusable CI + release workflow for a dry PHP package. See README.md.
+#
+# On pull requests: PR-title lint, composer, Prettier, PHPStan and Pest.
+# On a push to the default branch: the same checks, then bin/release.
+name: dry-ci
+
+on:
+  workflow_call:
+    inputs:
+      tag-prefix:
+        description: 'Prefix of version tags, e.g. "v". Empty for bare tags.'
+        type: string
+        default: ''
+      changelog-unit:
+        description: 'One changelog entry per "commit" or per merged "pr".'
+        type: string
+        default: commit
+      php-extensions:
+        description: Extra PHP extensions for shivammathur/setup-php, e.g. "imagick, gd".
+        type: string
+        default: ''
+      composer-args:
+        description: Extra `composer install` arguments.
+        type: string
+        default: ''
+      pest-args:
+        description: Extra Pest arguments.
+        type: string
+        default: ''
+      dry-ci-ref:
+        description: dry-ci ref whose scripts to run; keep it on the same major as this workflow.
+        type: string
+        default: v1
+    secrets:
+      BITBUCKET_SSH_KEY:
+        description: SSH key for private Bitbucket dependencies (e.g. dry3).
+        required: false
+      RELEASE_TOKEN:
+        description: Token allowed to push to a protected default branch. Falls back to GITHUB_TOKEN.
+        required: false
+
+env:
+  PHP_VERSION: '8.4'
+
+jobs:
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: TallieuTallieu/dry-ci
+          ref: ${{ inputs.dry-ci-ref }}
+          path: .dry-ci
+      # Out of the workspace, so the package's checks never see dry-ci's files.
+      - run: mv .dry-ci "$RUNNER_TEMP/dry-ci"
+      - name: Lint PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: $RUNNER_TEMP/dry-ci/bin/lint-pr-title "$TITLE"
+
+  php:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [phpstan, pest]
+    name: ${{ matrix.check }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: TallieuTallieu/dry-ci
+          ref: ${{ inputs.dry-ci-ref }}
+          path: .dry-ci
+      # Out of the workspace, so the package's checks never see dry-ci's files.
+      - run: mv .dry-ci "$RUNNER_TEMP/dry-ci"
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: ${{ inputs.php-extensions }}
+          tools: composer
+          coverage: none
+      - name: Load Bitbucket SSH key
+        env:
+          BITBUCKET_SSH_KEY: ${{ secrets.BITBUCKET_SSH_KEY }}
+        if: env.BITBUCKET_SSH_KEY != ''
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          ssh-add - <<< "$BITBUCKET_SSH_KEY"
+          ssh-keyscan bitbucket.org >> ~/.ssh/known_hosts
+      - name: composer
+        env:
+          DRY_CI_COMPOSER_ARGS: ${{ inputs.composer-args }}
+        run: $RUNNER_TEMP/dry-ci/bin/check composer
+      - name: ${{ matrix.check }}
+        env:
+          DRY_CI_PEST_ARGS: ${{ inputs.pest-args }}
+        run: $RUNNER_TEMP/dry-ci/bin/check ${{ matrix.check }}
+
+  prettier:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: TallieuTallieu/dry-ci
+          ref: ${{ inputs.dry-ci-ref }}
+          path: .dry-ci
+      # Out of the workspace, so the package's checks never see dry-ci's files.
+      - run: mv .dry-ci "$RUNNER_TEMP/dry-ci"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          package-manager-cache: false
+      - run: $RUNNER_TEMP/dry-ci/bin/check prettier
+
+  release:
+    needs: [php, prettier]
+    if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: dry-ci-release-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      # The branch head, not the pushed commit: a queued run then also sees the
+      # release commit of the run before it.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+      - uses: actions/checkout@v7
+        with:
+          repository: TallieuTallieu/dry-ci
+          ref: ${{ inputs.dry-ci-ref }}
+          path: .dry-ci
+      # Out of the workspace, so the package's checks never see dry-ci's files.
+      - run: mv .dry-ci "$RUNNER_TEMP/dry-ci"
+      - name: Release
+        id: release
+        run: |
+          export GIT_CLIFF="$("$RUNNER_TEMP/dry-ci/bin/install-git-cliff" "$RUNNER_TEMP/bin")"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          "$RUNNER_TEMP/dry-ci/bin/release" \
+            --tag-prefix "${{ inputs.tag-prefix }}" \
+            --unit "${{ inputs.changelog-unit }}" \
+            --notes-file "$RUNNER_TEMP/notes.md"
+      - name: GitHub release
+        if: steps.release.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: gh release create "$VERSION" --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
