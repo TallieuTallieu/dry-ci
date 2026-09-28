@@ -116,12 +116,33 @@ expect_version "chore bumps patch" 1.2.4
 new_repo unconventional 1.2.3
 commit "Add a feature without a type"
 expect_version "unconventional bumps patch" 1.2.4
+notes="$("$RELEASE" --dry-run 2>/dev/null)"
+expect_contains "unconventional commit is listed" "$notes" "Add a feature without a type"
 
 new_repo skipped 1.2.3
 commit "chore(build): rebuild admin assets"
 expect_version "skipped-only changes still release a patch" 1.2.4
 notes="$("$RELEASE" --dry-run 2>/dev/null)"
 expect_contains "skipped-only release says so" "$notes" "No notable changes."
+
+new_repo body 1.2.3
+commit "$(printf 'feat: add development tooling\n\nPHPStan level 9 with baseline, Prettier, and rebuilt assets.')"
+notes="$("$RELEASE" --dry-run 2>/dev/null)"
+expect_contains "noise words in the body don't skip a commit" "$notes" "Add development tooling"
+
+new_repo ghmerge 3.0.0
+git checkout -q -b feat/money
+commit "feat(cart)!: store money as int cents"
+git checkout -q main
+git merge -q --no-ff feat/money -m "Merge pull request #9 from TallieuTallieu/feat/money" -m "feat(cart)!: store money as int cents"
+notes="$("$RELEASE" --dry-run 2>/dev/null)"
+expect_contains "breaking merge bumps major" "$notes" "4.0.0"
+if [[ "$(grep -c 'Store money as int cents' <<< "$notes")" == 1 ]]; then
+  echo "ok   breaking change from a merged PR is listed once"
+else
+  echo "FAIL breaking change from a merged PR is listed once"
+  failures=$((failures + 1))
+fi
 
 # --- tags -------------------------------------------------------------------
 

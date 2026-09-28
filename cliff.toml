@@ -36,13 +36,18 @@ body = """
 
 No notable changes.
 {%- endif %}
-{%- for group, commits in commits | filter(attribute="breaking", value=false) | group_by(attribute="group") %}
+{#- Breaking commits are listed above only. Filter with value=true: unconventional
+    commits have no `breaking` value, so value=false would drop them. #}
+{%- for group, commits in commits | group_by(attribute="group") %}
+{%- set breaking_here = commits | filter(attribute="breaking", value=true) | length %}
+{%- if breaking_here < commits | length %}
 
 ### {{ group | striptags | trim }}
 
 {% for commit in commits -%}
-{{ self::entry(commit=commit) }}
+{% if not commit.breaking %}{{ self::entry(commit=commit) }}{% endif %}
 {%- endfor %}
+{%- endif %}
 {%- endfor %}
 
 """
@@ -57,7 +62,8 @@ postprocessors = [
 conventional_commits = true
 filter_unconventional = false
 split_commits = false
-protect_breaking_commits = true
+# Off, so the unit rule below also drops breaking merge commits (no duplicates).
+protect_breaking_commits = false
 filter_commits = false
 sort_commits = "oldest"
 tag_pattern = '^[0-9]+\.[0-9]+\.[0-9]+$'
@@ -87,14 +93,15 @@ commit_parsers = [
   # non-merge commits instead, so each merged PR becomes one entry.
   { field = "merge_commit", pattern = "true", skip = true }, # dry-ci:unit
   { message = "^dry-ci-skip", skip = true },
-  # Noise that changes nothing for consumers' reading of the changelog.
+  # Noise that changes nothing for consumers' reading of the changelog. The
+  # message includes the body, so unanchored rules match the subject line only.
   { message = '^chore\(release\)', skip = true },
   { message = '^chore\((build|format)\)', skip = true },
   { message = '^build(\(|:)', skip = true },
   { message = '^style(\(|:)', skip = true },
-  { message = '(?i)rebuild.*assets', skip = true },
-  { message = '(?i)prettier', skip = true },
-  { message = '(?i)phpstan.*baseline', skip = true },
+  { message = '(?i)^[^\n]*rebuild[^\n]*assets', skip = true },
+  { message = '(?i)^[^\n]*prettier', skip = true },
+  { message = '(?i)^[^\n]*phpstan[^\n]*baseline', skip = true },
   { message = '(?i)^(wip|typo|tmp)\b', skip = true },
   # Groups; the HTML comment fixes their order and is stripped on output.
   { message = '^feat', group = "<!-- 0 -->Features" },
