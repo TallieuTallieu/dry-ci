@@ -13,8 +13,8 @@ never secrets, so both GitHub and Bitbucket can fetch it without credentials.
 On a pull request:
 
 - The PR title must be a [Conventional Commit](https://www.conventionalcommits.org)
-  subject (`bin/lint-pr-title`). With squash merges the title becomes the commit
-  on main, so it decides the next version.
+  subject (`bin/lint-pr-title`). The merge commit carries the title, and each
+  merged PR becomes one changelog entry, so the title decides the next version.
 - `bin/check composer`, `prettier`, `phpstan` and `pest` run. PHPStan uses the
   package's own `phpstan.neon` (level and baseline); Pest is skipped when there
   is no `tests/` directory. PHP 8.4, Node LTS.
@@ -28,11 +28,15 @@ On a merge to the default branch, after the same checks pass, `bin/release`:
 
 On GitHub it also creates a GitHub Release with the same notes.
 
-| Commits since the last tag                     | Release |
-| ---------------------------------------------- | ------- |
-| any `type!:` or a `BREAKING CHANGE:` footer    | major   |
-| any `feat:`                                    | minor   |
-| anything else, conventional or not             | patch   |
+| PR titles merged since the last tag | Release |
+| ----------------------------------- | ------- |
+| any `type!:`                        | major   |
+| any `feat:`                         | minor   |
+| anything else, conventional or not  | patch   |
+
+Only the PR title counts: a `BREAKING CHANGE:` footer in a branch commit is not
+read, so put the `!` in the title. A commit pushed straight to the default
+branch still releases a patch, but gets no changelog entry.
 
 ## Use it
 
@@ -45,7 +49,7 @@ Copy [`examples/github-ci.yml`](examples/github-ci.yml) to
 | Input            | Default  | Use                                           |
 | ---------------- | -------- | --------------------------------------------- |
 | `tag-prefix`     | `''`     | `v` for `vX.Y.Z` tags                         |
-| `changelog-unit` | `commit` | `pr` for one entry per merged pull request    |
+| `changelog-unit` | `pr`     | `commit` for one entry per commit instead     |
 | `php-extensions` | `''`     | e.g. `imagick, gd`                            |
 | `composer-args`  | `''`     | extra `composer install` arguments            |
 | `pest-args`      | `''`     | extra Pest arguments                          |
@@ -63,10 +67,10 @@ requests and push to main).
 
 ### Repository settings
 
-- Allow **squash merge only**. On GitHub, set the default squash message to
-  "Pull request title and commit details"; on Bitbucket, keep the proposed
-  squash message. Either way the PR title becomes the changelog entry, and a
-  `BREAKING CHANGE:` footer in any squashed commit still forces a major release.
+- Allow **merge commits only**: turn off squash and rebase merging on GitHub,
+  and fast-forward, squash and rebase on Bitbucket. Those leave no merge commit,
+  so the PR would get no changelog entry. Keep the default merge message on
+  both hosts (GitHub's "Pull request title" setting works too).
 - Let the release bot push to the default branch (GitHub: `RELEASE_TOKEN` or a
   ruleset bypass; Bitbucket: the access token as a branch-restriction exception).
 - Add `CHANGELOG.md` to `.prettierignore`; it is generated.
@@ -86,17 +90,18 @@ config, edited by hand and committed
 ([sc-11672](https://app.shortcut.com/tallieu--tallieu/story/11672)); releases
 then only prepend.
 
-`--unit pr` makes each merged pull request one entry, reading the PR title from
-Bitbucket's `Merged in … (pull request #N)` or GitHub's `Merge pull request #N`
-commit. Use it for history made of merge commits (dry3); after the switch to
-squash merges, `commit` and `pr` give the same result.
+`--unit pr` (the default in both templates) makes each merged pull request one
+entry, reading the PR title from Bitbucket's `Merged in … (pull request #N)` or
+GitHub's `Merge pull request #N` commit, and skips the branch commits and "sync"
+merges. `--unit commit` lists every non-merge commit instead; it needs every
+commit to be conventional.
 
 ## Run it locally
 
 ```sh
 export GIT_CLIFF="$(bin/install-git-cliff)"   # pinned git-cliff into .bin/
 cd ../some-package
-../dry-ci/bin/release --dry-run --tag-prefix v  # prints the next version and notes
+../dry-ci/bin/release --dry-run --unit pr --tag-prefix v  # prints the next version and notes
 ```
 
 Tests: `GIT_CLIFF="$(bin/install-git-cliff)" tests/release.test.sh`.
@@ -124,6 +129,8 @@ Made 2026-09-28 in Shortcut epic 7219 ([sc-11671](https://app.shortcut.com/talli
   pre-release (beta) tags.
 - Tag format stays per repo: dry3 `vX.Y.Z`, the GitHub packages bare `X.Y.Z`.
   Composer treats both the same.
-- Squash merges with a linted PR title are the source of truth for the bump.
+- Merge commits, not squash: each merged PR is one changelog entry, read from
+  the linted PR title in its merge commit, and main keeps the branch history
+  (decided 2026-09-28, replacing the earlier squash-only plan).
 - CI commits `CHANGELOG.md` to the default branch.
 - PHP 8.4 only; each package keeps its own PHPStan level.

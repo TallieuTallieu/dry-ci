@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Check that a pull request title is a Conventional Commit subject, because the
-# squash-merged title is what bin/release reads to pick the version bump.
+# Check that a pull request title is a Conventional Commit subject: the merge
+# commit carries the title, and bin/release reads it to pick the version bump
+# and write the changelog entry.
 #
 # Usage: lint-pr-title "feat(orm): add a thing"
 #        lint-pr-title --bitbucket   # read the title of $BITBUCKET_PR_ID via the API
@@ -41,8 +42,9 @@ PR title is not a Conventional Commit subject:
 
   $title
 
-Use "<type>(<optional scope>): <description>", with ! before the colon for a
-breaking change. Types: ${TYPES//|/, }.
+Use "<type>(<optional scope>): <description>". Types: ${TYPES//|/, }.
+Mark a breaking change with ! before the colon: the title is what counts, a
+BREAKING CHANGE footer in a branch commit is not read.
   feat(orm): add record subpages        -> minor release
   fix: keep 2FA trust on logout         -> patch release
   feat(admin)!: drop the legacy sidebar -> major release

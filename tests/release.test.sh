@@ -182,6 +182,60 @@ new_repo ghsquash 3.0.14
 commit "$(printf 'fix(session): harden cookies (#10)\n\n* feat(cookie): support SameSite\n\nBREAKING CHANGE: CookieInterface gains delete()\n\n* docs: document it')"
 expect_version "BREAKING CHANGE in a squashed commit bumps major" 4.0.0
 
+# --- GitHub merges, one entry per PR ---------------------------------------
+
+# gh_merge BRANCH TITLE [COMMIT...]: a merge commit in GitHub's default format.
+gh_merge() {
+  local branch="$1" title="$2"
+  shift 2
+  git checkout -q -b "$branch"
+  for msg in "$@"; do commit "$msg"; done
+  git checkout -q main
+  git merge -q --no-ff "$branch" -m "Merge pull request #4 from TallieuTallieu/$branch" -m "$title"
+}
+
+new_repo ghpr 2.3.0
+gh_merge feature/sc-77--thing "feat(orm): add a thing" "wip" "feat: half a thing"
+notes="$("$RELEASE" --dry-run --unit pr 2>/dev/null)"
+expect_contains "GitHub PR title decides the bump" "$notes" "2.4.0"
+expect_contains "GitHub PR entry uses the title" "$notes" "**orm:** Add a thing"
+expect_absent "GitHub PR hides branch commits" "$notes" "Half a thing"
+
+new_repo ghprbang 2.3.0
+gh_merge fix/drop "fix(api)!: drop the v1 routes" "fix: drop routes"
+expect_version "! in the PR title bumps major" 3.0.0 --unit pr
+
+new_repo ghprfooter 2.3.0
+gh_merge fix/quiet "fix: tidy a thing" "$(printf 'refactor: rework\n\nBREAKING CHANGE: gone')"
+expect_version "a BREAKING CHANGE footer in a branch commit is not read" 2.3.1 --unit pr
+
+new_repo ghprsync 2.3.0
+git checkout -q -b feature/sync
+echo work > feature.txt && git add feature.txt && git commit -q -m "feat: work"
+git checkout -q main
+echo fix > main.txt && git add main.txt && git commit -q -m "fix: meanwhile on main"
+git checkout -q feature/sync
+git merge -q --no-ff main -m "Merge branch 'main' into feature/sync"
+git checkout -q main
+git merge -q --no-ff feature/sync -m "Merge pull request #5 from TallieuTallieu/feature/sync" -m "feat: add work"
+notes="$("$RELEASE" --dry-run --unit pr 2>/dev/null)"
+expect_absent "sync merges are not entries" "$notes" "Merge branch"
+expect_contains "the PR is an entry" "$notes" "Add work"
+
+new_repo ghprtitle 2.3.0
+git checkout -q -b feature/x
+commit "wip"
+git checkout -q main
+git merge -q --no-ff feature/x -m "feat(admin): add x (#6)"
+notes="$("$RELEASE" --dry-run --unit pr 2>/dev/null)"
+expect_contains "\"PR title\" merge message format works" "$notes" "**admin:** Add x (#6)"
+
+new_repo ghprdirect 2.3.0
+commit "feat: pushed straight to main"
+notes="$("$RELEASE" --dry-run --unit pr 2>/dev/null)"
+expect_contains "a direct push releases a patch" "$notes" "2.3.1"
+expect_contains "a direct push has no entry" "$notes" "No notable changes."
+
 # --- releasing --------------------------------------------------------------
 
 new_repo release 2.0.0

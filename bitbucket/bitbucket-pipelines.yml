@@ -53,8 +53,8 @@ definitions:
           - git remote set-url origin "https://x-token-auth:${DRY_CI_BITBUCKET_TOKEN}@bitbucket.org/${BITBUCKET_REPO_FULL_NAME}.git"
           - git config user.name "dry-ci"
           - git config user.email "dry-ci@users.noreply.github.com"
-          # Adjust: --tag-prefix v for vX.Y.Z tags; --unit pr for one entry per merged PR.
-          - /opt/dry-ci/bin/release --tag-prefix v --branch "$BITBUCKET_BRANCH"
+          # Adjust: --tag-prefix v for vX.Y.Z tags, none for bare X.Y.Z.
+          - /opt/dry-ci/bin/release --tag-prefix v --unit pr --branch "$BITBUCKET_BRANCH"
 
 pipelines:
   pull-requests:

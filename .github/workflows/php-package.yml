@@ -12,9 +12,9 @@ on:
         type: string
         default: ''
       changelog-unit:
-        description: 'One changelog entry per "commit" or per merged "pr".'
+        description: 'One changelog entry per merged "pr" (read from the merge commit) or per "commit".'
         type: string
-        default: commit
+        default: pr
       php-extensions:
         description: Extra PHP extensions for shivammathur/setup-php, e.g. "imagick, gd".
         type: string
