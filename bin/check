@@ -19,8 +19,9 @@ warn() {
 check_composer() {
   # Not --strict: exact-version pins in require would fail it.
   composer validate --no-check-publish
-  eval "set -- ${DRY_CI_COMPOSER_ARGS:-}"
-  composer install --prefer-dist --no-progress --no-interaction "$@"
+  local args=()
+  eval "args=(${DRY_CI_COMPOSER_ARGS:-})"
+  composer install --prefer-dist --no-progress --no-interaction ${args[@]+"${args[@]}"}
 }
 
 check_prettier() {
@@ -48,8 +49,9 @@ check_pest() {
     return 0
   fi
   [[ -x vendor/bin/pest ]] || { echo "vendor/bin/pest missing; require pestphp/pest in require-dev" >&2; exit 1; }
-  eval "set -- ${DRY_CI_PEST_ARGS:-}"
-  vendor/bin/pest "$@"
+  local args=()
+  eval "args=(${DRY_CI_PEST_ARGS:-})"
+  vendor/bin/pest ${args[@]+"${args[@]}"}
 }
 
 case "${1:-}" in

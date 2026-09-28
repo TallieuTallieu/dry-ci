@@ -61,7 +61,7 @@ expect_contains() {
     echo "ok   $name"
   else
     echo "FAIL $name: missing '$needle' in:"
-    echo "$haystack" | sed 's/^/     /'
+    echo "     ${haystack//$'\n'/$'\n'     }"
     failures=$((failures + 1))
   fi
 }
@@ -72,7 +72,7 @@ expect_absent() {
     echo "ok   $name"
   else
     echo "FAIL $name: unexpected '$needle' in:"
-    echo "$haystack" | sed 's/^/     /'
+    echo "     ${haystack//$'\n'/$'\n'     }"
     failures=$((failures + 1))
   fi
 }

@@ -74,6 +74,7 @@ else
   git fetch --quiet --tags 2>/dev/null || log "could not fetch tags; using local tags"
 fi
 
+# shellcheck disable=SC2016 # a sed expression, not shell
 prefix_re="$(printf '%s' "$tag_prefix" | sed 's/[.[\*^$()+?{|/]/\\&/g')"
 tag_pattern="^${prefix_re}[0-9]+\\.[0-9]+\\.[0-9]+\$"
 cliff() { RUST_LOG=warn "$git_cliff" --config "$config" --tag-pattern "$tag_pattern" "$@"; }
