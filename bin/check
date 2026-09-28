@@ -3,13 +3,14 @@
 # and Bitbucket Pipelines run exactly the same commands.
 #
 # Usage: check composer   validate composer.json and install dependencies
-#        check prettier   yarn install + prettier --check on the whole repo
+#        check prettier   prettier --check on the whole repo, with the locked Prettier
 #        check phpstan    PHPStan with the repo's own phpstan.neon (level, baseline)
 #        check pest       Pest, when the repo has tests
 #
 # Environment (shell-quoted, like a command line):
 #   DRY_CI_COMPOSER_ARGS  extra `composer install` arguments
 #   DRY_CI_PEST_ARGS      extra Pest arguments, e.g. --filter='/^(?!.*GD).*$/'
+#   DRY_CI_PRETTIER_CACHE Prettier's cache file (default ~/.cache/prettier/cache)
 set -euo pipefail
 
 warn() {
@@ -29,9 +30,35 @@ check_prettier() {
     warn "no prettier in package.json; skipping the formatting check"
     return 0
   fi
-  corepack enable
-  yarn install --immutable
-  yarn prettier --check --ignore-unknown .
+  local tools
+  tools="$(mktemp -d "${TMPDIR:-/tmp}/dry-ci-prettier.XXXXXX")"
+  # Install only Prettier and its plugins (the package.json dependencies with
+  # "prettier" in their name), not the whole project. The copied yarn.lock
+  # keeps their exact versions, transitive dependencies included.
+  node -e '
+    const pkg = require(process.cwd() + "/package.json");
+    const all = { ...pkg.dependencies, ...pkg.devDependencies };
+    const deps = Object.fromEntries(Object.entries(all).filter(([name]) => name.includes("prettier")));
+    const out = { name: "dry-ci-prettier", private: true, devDependencies: deps };
+    if (pkg.packageManager) out.packageManager = pkg.packageManager;
+    require("fs").writeFileSync(process.argv[1] + "/package.json", JSON.stringify(out, null, 2));
+  ' "$tools"
+  if [[ -f yarn.lock ]]; then
+    cp yarn.lock "$tools/"
+    printf 'nodeLinker: node-modules\n' > "$tools/.yarnrc.yml"
+    corepack enable
+    (cd "$tools" && yarn install --no-immutable --mode=skip-build)
+  else
+    (cd "$tools" && npm install --no-audit --no-fund)
+  fi
+  # Link the tools in, unless the checkout has a real node_modules of its own.
+  if [[ -L node_modules || ! -e node_modules ]]; then
+    ln -sfn "$tools/node_modules" node_modules
+  fi
+  # A content-keyed cache stays valid on fresh CI clones, so unchanged files
+  # aren't checked again. CI keeps DRY_CI_PRETTIER_CACHE between runs.
+  node_modules/.bin/prettier --check --ignore-unknown --cache --cache-strategy content \
+    --cache-location "${DRY_CI_PRETTIER_CACHE:-$HOME/.cache/prettier/cache}" .
 }
 
 check_phpstan() {

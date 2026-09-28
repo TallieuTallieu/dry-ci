@@ -15,12 +15,17 @@ release, and how the changelog is written.
   | Check      | Runs                                          | Skipped when                        |
   | ---------- | --------------------------------------------- | ----------------------------------- |
   | `composer` | `composer validate`, then `composer install`  | never                               |
-  | `prettier` | `yarn install`, `yarn prettier --check .`     | no `prettier` in `package.json`     |
+  | `prettier` | `prettier --check .` with the locked Prettier  | no `prettier` in `package.json`     |
   | `phpstan`  | PHPStan with the package's own `phpstan.neon` | no `phpstan.neon`                   |
   | `pest`     | Pest                                          | no `tests/` directory               |
 
   PHP 8.4, Node LTS. PHPStan's level and baseline stay per package. A skipped check shows a
   warning, not a failure.
+
+  The Prettier check installs only the `package.json` dependencies with "prettier" in their name
+  (Prettier and its plugins), at the versions in `yarn.lock`, instead of the whole project; it
+  skips native builds and caches its results between runs. A Prettier plugin whose name lacks
+  "prettier" would not be installed.
 
 ## On a merge to the default branch
 

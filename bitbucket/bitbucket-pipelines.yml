@@ -10,6 +10,11 @@ clone:
   depth: full
 
 definitions:
+  caches:
+    # bin/check prettier: Yarn's download cache, Corepack's Yarn, Prettier's results.
+    yarn-berry: ~/.yarn/berry/cache
+    corepack: ~/.cache/node/corepack
+    prettier: ~/.cache/prettier
   steps:
     - step: &pr-title
         name: PR title
@@ -38,7 +43,9 @@ definitions:
         name: Prettier
         image: node:lts
         caches:
-          - node
+          - yarn-berry
+          - corepack
+          - prettier
         script:
           - *fetch-dry-ci
           - /opt/dry-ci/bin/check prettier

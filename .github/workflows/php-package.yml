@@ -122,6 +122,18 @@ jobs:
         with:
           node-version: lts/*
           package-manager-cache: false
+      # Yarn's download cache, Corepack's Yarn and Prettier's results. A new key
+      # per run saves the updated Prettier cache; restore-keys take the latest.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.yarn/berry/cache
+            ~/.cache/node/corepack
+            ~/.cache/prettier
+          key: dry-ci-prettier-${{ hashFiles('yarn.lock', 'package.json') }}-${{ github.run_id }}
+          restore-keys: |
+            dry-ci-prettier-${{ hashFiles('yarn.lock', 'package.json') }}-
+            dry-ci-prettier-
       - run: $RUNNER_TEMP/dry-ci/bin/check prettier
 
   release:
