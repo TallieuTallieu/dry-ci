@@ -1,0 +1,16 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - run: shellcheck bin/* tests/*.sh
+      - run: GIT_CLIFF="$(bin/install-git-cliff "$RUNNER_TEMP/bin")" tests/release.test.sh
