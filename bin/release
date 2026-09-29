@@ -88,7 +88,8 @@ latest="$(git tag --list | grep -E "$tag_pattern" | sort -V | tail -n 1 || true)
 # Ignore the stable tags $latest doesn't contain, so the bump starts at $latest.
 stray="$(git tag --list | grep -E "$tag_pattern" | grep -vxF -f <(git tag --merged "$latest") || true)"
 if [[ -n "$stray" ]]; then
-  cliff_args+=(--ignore-tags "^($(sed 's/[.]/\\./g' <<< "$stray" | paste -sd '|' -))\$")
+  stray="${stray//./\\.}"
+  cliff_args+=(--ignore-tags "^(${stray//$'\n'/|})\$")
 fi
 
 if git tag --points-at HEAD | grep -qE "$tag_pattern"; then
