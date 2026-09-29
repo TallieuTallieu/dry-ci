@@ -162,6 +162,21 @@ git tag v9.9.9
 commit "fix: correct a thing"
 expect_version "tags with another prefix are ignored" 3.1.1
 
+# 3.0.0 was tagged on a side branch; main later tagged 1.0.5 on a newer commit,
+# then merged the side branch. The bump starts from the highest version.
+new_repo sidebranch 1.0.0
+git checkout -q -b next
+GIT_COMMITTER_DATE="2025-09-01T10:00:00" commit "feat!: move to the next major"
+git tag 3.0.0
+git checkout -q main
+GIT_COMMITTER_DATE="2025-09-08T10:00:00" git commit -q --allow-empty -m "fix: patch the old major"
+git tag 1.0.5
+git merge -q --no-ff next -m "Merge branch 'next'"
+commit "feat!: drop a thing"
+expect_version "bumps from the highest tag, not the newest" 4.0.0
+notes="$("$RELEASE" --dry-run 2>/dev/null)"
+expect_absent "the side-branch release isn't repeated" "$notes" "## 3.0.0"
+
 # --- Bitbucket merges -------------------------------------------------------
 
 new_repo bbfeat v1.0.0

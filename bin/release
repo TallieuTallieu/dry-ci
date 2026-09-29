@@ -77,10 +77,20 @@ fi
 # shellcheck disable=SC2016 # a sed expression, not shell
 prefix_re="$(printf '%s' "$tag_prefix" | sed 's/[.[\*^$()+?{|/]/\\&/g')"
 tag_pattern="^${prefix_re}[0-9]+\\.[0-9]+\\.[0-9]+\$"
-cliff() { RUST_LOG=warn "$git_cliff" --config "$config" --tag-pattern "$tag_pattern" "$@"; }
+cliff_args=(--config "$config" --tag-pattern "$tag_pattern")
+cliff() { RUST_LOG=warn "$git_cliff" "${cliff_args[@]}" "$@"; }
 
 latest="$(git tag --list | grep -E "$tag_pattern" | sort -V | tail -n 1 || true)"
 [[ -n "$latest" ]] || die "no stable tag matching $tag_pattern; tag the first release by hand"
+
+# git-cliff bumps from the last tag it meets in history, which can be a lower
+# version on a newer commit (1.0.5 on main after 3.0.0 on a merged side branch).
+# Ignore the stable tags $latest doesn't contain, so the bump starts at $latest.
+stray="$(git tag --list | grep -E "$tag_pattern" | grep -vxF -f <(git tag --merged "$latest") || true)"
+if [[ -n "$stray" ]]; then
+  stray="${stray//./\\.}"
+  cliff_args+=(--ignore-tags "^(${stray//$'\n'/|})\$")
+fi
 
 if git tag --points-at HEAD | grep -qE "$tag_pattern"; then
   log "HEAD is already released as $(git tag --points-at HEAD | grep -E "$tag_pattern" | head -n 1)"
@@ -117,10 +127,13 @@ fi
 [[ "$next" =~ $tag_pattern ]] || die "computed version '$next' does not match $tag_pattern"
 
 log "$latest -> $next ($pending commits)"
+# The commits since $latest, as git counts them. --unreleased can also repeat
+# $latest's own section when $latest was tagged on a merged side branch.
+range="$latest..HEAD"
 
 if [[ "$dry_run" == true ]]; then
   echo "$next"
-  cliff --unreleased --tag "$next" --strip all
+  cliff "$range" --tag "$next" --strip all
   exit 0
 fi
 
@@ -128,13 +141,13 @@ git config user.name >/dev/null || git config user.name "dry-ci"
 git config user.email >/dev/null || git config user.email "dry-ci@users.noreply.github.com"
 
 if [[ -f CHANGELOG.md ]]; then
-  cliff --unreleased --tag "$next" --prepend CHANGELOG.md
+  cliff "$range" --tag "$next" --prepend CHANGELOG.md
 else
-  cliff --unreleased --tag "$next" --output CHANGELOG.md
+  cliff "$range" --tag "$next" --output CHANGELOG.md
 fi
 
 if [[ -n "$notes_file" ]]; then
-  cliff --unreleased --tag "$next" --strip all > "$notes_file"
+  cliff "$range" --tag "$next" --strip all > "$notes_file"
 fi
 
 git add CHANGELOG.md
