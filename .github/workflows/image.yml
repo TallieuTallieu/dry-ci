@@ -43,4 +43,4 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           docker run --rm ghcr.io/tallieutallieu/dry-ci-php:8.4 sh -c \
-            'php -v && php -m | grep -xE "gd|exif|imagick|zip" | wc -l | grep -qx 4 && composer --version && git --version'
+            'php -v && php -m | grep -xE "gd|exif|imagick|zip" | wc -l | grep -qx 4 && composer --version && git --version && ssh -V'
