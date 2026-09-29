@@ -172,6 +172,13 @@ expect_contains "per-PR entry uses the title" "$notes" "**admin:** Add a thing"
 expect_contains "per-PR entry links the story" "$notes" "[sc-123](https://app.shortcut.com/tallieu--tallieu/story/123)"
 expect_absent "per-PR hides branch commits" "$notes" "Wip"
 
+new_repo bbpatch v1.0.0
+merge_pr feature/sc-12--export "feat(admin): add CSV export [patch]" "feat: export"
+expect_version "[patch] in a Bitbucket PR title bumps patch" v1.0.1 --tag-prefix v --unit pr
+notes="$("$RELEASE" --dry-run --tag-prefix v --unit pr 2>/dev/null)"
+expect_contains "[patch] Bitbucket entry keeps the story" "$notes" "**admin:** Add CSV export ([sc-12]"
+expect_absent "[patch] marker is not in the Bitbucket changelog" "$notes" "[patch]"
+
 new_repo bbsquash v1.0.0
 commit "$(printf 'Merged in bug/sc-9--fix-thing (pull request #7)\n\nfix(orm): correct a thing\n\n* wip\n* more')"
 notes="$("$RELEASE" --dry-run --tag-prefix v 2>/dev/null)"
@@ -209,6 +216,41 @@ new_repo ghprfooter 2.3.0
 gh_merge fix/quiet "fix: tidy a thing" "$(printf 'refactor: rework\n\nBREAKING CHANGE: gone')"
 expect_version "a BREAKING CHANGE footer in a branch commit is not read" 2.3.1 --unit pr
 
+new_repo ghprpatch 2.3.0
+gh_merge feature/export "feat(admin): add CSV export [patch]" "feat: export"
+expect_version "[patch] in a feat PR title bumps patch" 2.3.1 --unit pr
+notes="$("$RELEASE" --dry-run --unit pr 2>/dev/null)"
+expect_contains "[patch] feat is still a feature" "$notes" "### Features"
+expect_contains "[patch] feat entry uses the title" "$notes" "**admin:** Add CSV export"
+expect_absent "[patch] marker is not in the changelog" "$notes" "[patch]"
+
+new_repo ghprminor 2.3.0
+gh_merge fix/api "fix(api): accept a limit [minor]" "fix: limit"
+expect_version "[minor] in a fix PR title bumps minor" 2.4.0 --unit pr
+notes="$("$RELEASE" --dry-run --unit pr 2>/dev/null)"
+expect_contains "[minor] fix is still a fix" "$notes" "### Fixes"
+expect_contains "[minor] fix entry uses the title" "$notes" "**api:** Accept a limit"
+expect_absent "[minor] marker is not in the changelog" "$notes" "[minor]"
+
+new_repo ghprmajor 2.3.0
+gh_merge fix/api "fix(api): reject an empty limit [major]" "fix: limit"
+expect_version "[major] in a fix PR title bumps major" 3.0.0 --unit pr
+notes="$("$RELEASE" --dry-run --unit pr 2>/dev/null)"
+expect_contains "[major] is a breaking change" "$notes" "### Breaking changes"
+expect_contains "[major] entry uses the title" "$notes" "**api:** Reject an empty limit"
+expect_absent "[major] marker is not in the changelog" "$notes" "[major]"
+
+new_repo commitminor 2.3.0
+commit "docs: document the API [minor]"
+expect_version "[minor] on a commit bumps minor" 2.4.0
+notes="$("$RELEASE" --dry-run 2>/dev/null)"
+expect_contains "[minor] docs is still another change" "$notes" "### Other changes"
+
+new_repo ghprpatchmixed 2.3.0
+gh_merge feature/export "feat: add CSV export [patch]" "feat: export"
+gh_merge feature/import "feat: add CSV import" "feat: import"
+expect_version "[patch] doesn't lower another PR's feat" 2.4.0 --unit pr
+
 new_repo ghprsync 2.3.0
 git checkout -q -b feature/sync
 echo work > feature.txt && git add feature.txt && git commit -q -m "feat: work"
@@ -235,6 +277,43 @@ commit "feat: pushed straight to main"
 notes="$("$RELEASE" --dry-run --unit pr 2>/dev/null)"
 expect_contains "a direct push releases a patch" "$notes" "2.3.1"
 expect_contains "a direct push has no entry" "$notes" "No notable changes."
+
+# --- [no release] -----------------------------------------------------------
+
+new_repo norelease 2.3.0
+gh_merge docs/x "docs: explain x [no release]" "docs: x"
+expect_version "a [no release] PR doesn't release" "" --unit pr
+"$RELEASE" --unit pr >/dev/null 2>&1
+expect_absent "a [no release] PR isn't tagged" "$(git tag --points-at HEAD)" "2.3"
+gh_merge feature/y "feat: add y [no release]" "feat: y"
+expect_version "two [no release] PRs don't release" "" --unit pr
+gh_merge fix/z "fix: correct z" "fix: z"
+expect_version "held-back PRs count towards the next bump" 2.4.0 --unit pr
+notes="$("$RELEASE" --dry-run --unit pr 2>/dev/null)"
+expect_contains "held-back PRs are in the next release" "$notes" "Explain x"
+expect_absent "[no release] marker is not in the changelog" "$notes" "[no release]"
+
+new_repo noreleasebb v1.0.0
+merge_pr chore/sc-5--tidy "chore: tidy up [no release]" "chore: tidy"
+expect_version "a Bitbucket [no release] PR doesn't release" "" --tag-prefix v --unit pr
+
+new_repo noreleasecommit 2.3.0
+commit "docs: explain x [no release]"
+expect_version "a [no release] commit doesn't release" ""
+
+new_repo noreleasedirect 2.3.0
+gh_merge docs/x "docs: explain x [no release]" "docs: x"
+commit "fix: pushed straight to main"
+expect_version "a direct push next to a [no release] PR releases" 2.3.1 --unit pr
+
+new_repo noreleasesync 2.3.0
+commit "fix: meanwhile on main"
+git checkout -q -b docs/sync
+commit "docs: x"
+git merge -q --no-ff main -m "Merge branch 'main' into docs/sync"
+git checkout -q main
+git merge -q --no-ff docs/sync -m "Merge pull request #5 from TallieuTallieu/docs/sync" -m "docs: explain x [no release]"
+expect_version "main's own changes still release past a [no release] PR" 2.3.1 --unit pr
 
 # --- releasing --------------------------------------------------------------
 

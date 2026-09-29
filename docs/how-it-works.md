@@ -45,8 +45,8 @@ The same checks run. When they pass, `bin/release`:
    keeps the release commit from starting another run.
 
 On GitHub it also creates a GitHub Release with the same notes. When there is nothing to
-release, or the commit is already tagged, it stops without changing anything, so a re-run is
-safe.
+release, only [`[no release]`](#release-markers) pull requests, or the commit is already
+tagged, it stops without changing anything, so a re-run is safe.
 
 ### The version bump
 
@@ -66,6 +66,27 @@ The highest bump wins: one `feat:` among ten `fix:` titles makes a minor release
   Bitbucket writes `Merged in <branch> (pull request #N)` with the title below it, GitHub
   `Merge pull request #N from <branch>` with the title below it. Squash and rebase merges leave
   no merge commit, so they are turned off (see [setup](setup.md)).
+
+#### Release markers
+
+One marker at the end of the title overrides the bump of that pull request:
+
+| Marker         | Release                                                 |
+| -------------- | ------------------------------------------------------- |
+| `[major]`      | major; the same as `!`, listed under Breaking changes   |
+| `[minor]`      | minor, e.g. `fix(api): accept a limit [minor]`          |
+| `[patch]`      | patch, e.g. `feat(admin): add CSV export [patch]`       |
+| `[no release]` | none; the pull request goes out with the next release   |
+
+- **The entry keeps its section** from the type, without the marker: a `[patch]` feature is
+  still under Features.
+- **The highest bump still wins.** A marker only sets its own pull request: `[patch]` next to a
+  plain `feat:` still makes a minor release.
+- **`[no release]`** skips the release when every change since the last tag is held back that
+  way. The pull request is then in the changelog of the next release, and counts towards its
+  bump, so several pull requests can be batched into one release.
+- **The title check** rejects a marker anywhere but the end, more than one, one in upper case,
+  and `!` with `[minor]` or `[patch]`.
 
 ## The changelog
 

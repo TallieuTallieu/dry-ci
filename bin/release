@@ -93,6 +93,20 @@ if [[ "$pending" -eq 0 ]]; then
   exit 0
 fi
 
+# A commit or merged PR whose title ends in [no release] doesn't release on its
+# own, nor do that PR's branch commits; they go out with the next release.
+held=""
+while read -r c; do
+  held+="$c"$'\n'
+  if git rev-parse -q --verify "$c^2" >/dev/null; then
+    held+="$(git rev-list "$c^2" "^$c^1" "^$latest")"$'\n'
+  fi
+done < <(git log --format=%H -E --grep='\[no release\]$' "$latest"..HEAD)
+if [[ -n "$held" ]] && [[ -z "$(comm -23 <(git rev-list "$latest"..HEAD | sort) <(sort -u <<< "$held"))" ]]; then
+  log "only [no release] changes since $latest"
+  exit 0
+fi
+
 next="$(cliff --bumped-version)"
 # git-cliff only bumps for commits it keeps; a release of nothing but skipped
 # changes (e.g. rebuilt assets) is still a release, so bump the patch here.
