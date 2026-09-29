@@ -18,6 +18,7 @@ a dry-ci version, and works the same whether it is hosted on GitHub or Bitbucket
 | Read this                                 | When you want to                                                                                               |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | [Setting up a package](docs/setup.md)     | Switch a package to dry-ci: settings, secrets and the pull request, step by step, with a checklist per package |
+| [Setting up a project](docs/projects.md)  | Run the checks in a project (a site), without releases                                                         |
 | [How it works](docs/how-it-works.md)      | Know what the checks do, how a PR title becomes a version, and how the changelog is written                    |
 | [Maintaining dry-ci](docs/maintaining.md) | Change dry-ci itself: layout, local runs, tests and releasing a new version                                    |
 
@@ -40,6 +41,10 @@ jobs:
 
 A Bitbucket package copies [`bitbucket/bitbucket-pipelines.yml`](bitbucket/bitbucket-pipelines.yml),
 which fetches the same scripts at `v1`. [Setting up a package](docs/setup.md) has every step.
+
+A dry project (a site) isn't versioned: it copies
+[`bitbucket/project-pipelines.yml`](bitbucket/project-pipelines.yml), which runs only the
+checks, on pull requests. See [Setting up a project](docs/projects.md).
 
 ## PR title cheatsheet
 

@@ -12,9 +12,10 @@ ENV COMPOSER_HOME=/root/.composer
 
 COPY --from=ghcr.io/mlocati/php-extension-installer:2.12.0 /usr/bin/install-php-extensions /usr/local/bin/
 
-# git and unzip for Composer; install-php-extensions stays in the image, so a
-# package that needs one more extension can add it in its own step.
+# git and unzip for Composer, and ssh for git@bitbucket.org dependencies such as
+# dry3 in a project; install-php-extensions stays in the image, so a package that
+# needs one more extension can add it in its own step.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git unzip \
+    && apt-get install -y --no-install-recommends git openssh-client unzip \
     && rm -rf /var/lib/apt/lists/* \
     && install-php-extensions @composer gd exif imagick zip
