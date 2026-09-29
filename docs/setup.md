@@ -14,11 +14,12 @@ with a merge commit produces the package's first automatic release.
 
 Check these in the package, on an up-to-date checkout of its default branch:
 
-1. **A stable version tag exists.** dry-ci bumps from the latest `X.Y.Z` (or `vX.Y.Z`) tag
+1. **A stable version tag exists.** dry-ci bumps from the highest `X.Y.Z` (or `vX.Y.Z`) tag
    and refuses to run without one. Tag the first release by hand if there is none.
-2. **The latest release is on the default branch.** `git merge-base --is-ancestor <latest tag>
-   origin/<default branch>` must succeed. dry-internal-api fails this: its 3.x tags live only
-   on the `dry3` branch, so merge that branch first.
+2. **The highest release is on the default branch.** `git merge-base --is-ancestor <highest tag>
+   origin/<default branch>` must succeed. If it lives only on a side branch (oak-console-table's
+   3.0.0 on `dry3`), merge that branch first. A lower tag made later on the default branch
+   (oak-console-table's 1.0.5) is ignored.
 3. **`composer install` can resolve every dependency.** A package that requires
    `tallieutallieu/dry` needs the dry3 repository in `composer.json`:
 
