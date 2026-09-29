@@ -24,15 +24,8 @@ a dry-ci version, and works the same whether it is hosted on GitHub or Bitbucket
 ## In a package, in short
 
 Pull request titles are [Conventional Commits](https://www.conventionalcommits.org), and they
-decide the release:
-
-| Title                                   | Release |
-| --------------------------------------- | ------- |
-| `feat(admin)!: drop the legacy sidebar` | major   |
-| `feat(orm): add record subpages`        | minor   |
-| `fix: keep 2FA trust on logout`         | patch   |
-
-Merge with a **merge commit**. The release follows on its own.
+decide the release (see the [cheatsheet](#pr-title-cheatsheet)). Merge with a **merge commit**.
+The release follows on its own.
 
 A GitHub package calls the reusable workflow ([example](examples/github-ci.yml)):
 
@@ -47,6 +40,45 @@ jobs:
 
 A Bitbucket package copies [`bitbucket/bitbucket-pipelines.yml`](bitbucket/bitbucket-pipelines.yml),
 which fetches the same scripts at `v1`. [Setting up a package](docs/setup.md) has every step.
+
+## PR title cheatsheet
+
+`<type>(<optional scope>): <description> [<optional marker>]`. The scope is shown in bold in
+the changelog.
+
+The type picks the release and the changelog section:
+
+| PR title                                              | Release | Changelog section               |
+| ----------------------------------------------------- | ------- | ------------------------------- |
+| `feat(admin)!: drop the legacy sidebar`               | major   | Breaking changes                |
+| `fix(api)!: remove the v1 routes`                     | major   | Breaking changes                |
+| `feat(orm): add record subpages`                      | minor   | Features                        |
+| `fix: keep 2FA trust on logout`                       | patch   | Fixes                           |
+| `perf(orm): cache the schema`                         | patch   | Fixes                           |
+| `refactor`, `docs`, `test`, `ci`, `chore`, `revert`   | patch   | Other changes                   |
+| `build:`, `style:`, `chore(build):`, `chore(format):` | patch   | left out ("No notable changes") |
+
+A marker at the end of the title overrides the release. The section still comes from the type:
+
+| PR title                                  | Release                          | Changelog section |
+| ----------------------------------------- | -------------------------------- | ----------------- |
+| `fix(api): reject an empty limit [major]` | major                            | Breaking changes  |
+| `fix(api): accept a limit [minor]`        | minor                            | Fixes             |
+| `feat(admin): add CSV export [patch]`     | patch                            | Features          |
+| `docs: explain the setup [no release]`    | none; goes out with the next one | Other changes     |
+
+- **The highest bump wins** among the pull requests merged since the last release. A marker
+  only sets its own pull request's bump: `[patch]` next to a plain `feat:` still makes a minor
+  release.
+- **`[no release]`** holds a pull request back. Nothing is tagged; it is in the changelog of
+  the next release and counts towards that release's bump. Every other merge releases.
+- **One marker, at the end, in lower case.** `[major]` is the same as `!`; `!` with `[minor]`
+  or `[patch]` is rejected.
+- **`!` before the colon** means breaking. Only the title counts: a `BREAKING CHANGE:` footer
+  in a branch commit is not read.
+- **`sc-1234`** in the title (or, on Bitbucket, in the branch name) becomes a Shortcut link.
+
+More in [How it works](docs/how-it-works.md#the-version-bump).
 
 ## Why this repository is public
 
