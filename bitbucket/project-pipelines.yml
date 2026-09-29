@@ -1,0 +1,62 @@
+# dry-ci checks for a Bitbucket-hosted dry project (a site, not a package). Copy
+# to the project root as bitbucket-pipelines.yml and adjust the marked lines.
+# Projects aren't versioned: this runs the checks on pull requests and never
+# tags or releases. All logic lives in dry-ci's bin/check.
+#
+# Repository SSH key (Repository settings → Pipelines → SSH keys) with read
+# access to the private repositories in composer.json, such as dry3.
+
+definitions:
+  caches:
+    # bin/check prettier: Yarn's download cache, Corepack's Yarn, Prettier's results.
+    yarn-berry: ~/.yarn/berry/cache
+    corepack: ~/.cache/node/corepack
+    prettier: ~/.cache/prettier
+  steps:
+    - step: &php
+        name: PHPStan + Pest
+        # dry-ci's CI image: PHP 8.4 with Composer, ssh, gd, exif, imagick and zip.
+        image: ghcr.io/tallieutallieu/dry-ci-php:8.4
+        caches:
+          - composer
+        script:
+          # Pinned to dry-ci's v1 tag; later steps reuse this line.
+          - &fetch-dry-ci >-
+            mkdir -p /opt/dry-ci &&
+            curl -fsSL https://github.com/TallieuTallieu/dry-ci/archive/refs/tags/v1.tar.gz
+            | tar -xz --strip-components=1 -C /opt/dry-ci
+          # Adjust: only if the project needs another PHP extension, e.g.
+          # - install-php-extensions intl
+          # --no-scripts: a project's post-install scripts (dry publish:assets)
+          # expect a configured site, which CI doesn't have.
+          - &composer DRY_CI_COMPOSER_ARGS=--no-scripts /opt/dry-ci/bin/check composer
+          - /opt/dry-ci/bin/check phpstan
+          - /opt/dry-ci/bin/check pest
+    - step: &audit
+        name: composer audit
+        image: ghcr.io/tallieutallieu/dry-ci-php:8.4
+        caches:
+          - composer
+        script:
+          - *fetch-dry-ci
+          - *composer
+          - /opt/dry-ci/bin/check audit
+    - step: &prettier
+        name: Prettier
+        image: node:lts
+        caches:
+          - yarn-berry
+          - corepack
+          - prettier
+        script:
+          - *fetch-dry-ci
+          - /opt/dry-ci/bin/check prettier
+
+pipelines:
+  pull-requests:
+    '**':
+      - parallel:
+          - step: *php
+          - step: *audit
+          - step: *prettier
+          # Adjust: the project's own checks go here as extra steps, e.g. ESLint.

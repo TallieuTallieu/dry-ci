@@ -8,12 +8,13 @@ to the packages.
 | Path                                                                   | What                                                                  |
 | ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | [`bin/release`](../bin/release)                                        | Next version, `CHANGELOG.md` section, release commit, tag, push       |
-| [`bin/check`](../bin/check)                                            | The package checks: `composer`, `prettier`, `phpstan`, `pest`         |
+| [`bin/check`](../bin/check)                                            | The checks: `composer`, `prettier`, `phpstan`, `pest`, `audit`        |
 | [`bin/lint-pr-title`](../bin/lint-pr-title)                            | PR-title check (a title argument, or `--bitbucket` via the API)       |
 | [`bin/install-git-cliff`](../bin/install-git-cliff)                    | Downloads the pinned git-cliff and checks its checksum                |
 | [`cliff.toml`](../cliff.toml)                                          | git-cliff config: parsing, grouping, noise filters, changelog layout  |
 | [`.github/workflows/php-package.yml`](../.github/workflows/php-package.yml) | The reusable workflow GitHub packages call                        |
 | [`bitbucket/bitbucket-pipelines.yml`](../bitbucket/bitbucket-pipelines.yml) | The template Bitbucket packages copy                              |
+| [`bitbucket/project-pipelines.yml`](../bitbucket/project-pipelines.yml) | The checks-only template Bitbucket projects copy                  |
 | [`examples/github-ci.yml`](../examples/github-ci.yml)                  | The thin caller a GitHub package copies                               |
 | [`docker/php/Dockerfile`](../docker/php/Dockerfile)                    | The CI image Bitbucket steps run in                                   |
 | [`tests/release.test.sh`](../tests/release.test.sh)                    | Scenario tests for `bin/release` and `cliff.toml`                     |
@@ -69,8 +70,9 @@ against one or two packages first.
 ## The CI image
 
 Bitbucket steps run in `ghcr.io/tallieutallieu/dry-ci-php:8.4`, built from
-[`docker/php/Dockerfile`](../docker/php/Dockerfile): PHP 8.4 CLI with git, unzip, Composer, `gd`,
-`exif`, `imagick` and `zip`. Compiling those extensions on every run took about two minutes;
+[`docker/php/Dockerfile`](../docker/php/Dockerfile): PHP 8.4 CLI with git, ssh, unzip, Composer,
+`gd`, `exif`, `imagick` and `zip`. ssh is for projects, which pull dry3 over
+`git@bitbucket.org`. Compiling those extensions on every run took about two minutes;
 with the image, a step starts with the image pull. GitHub packages don't use it: `setup-php`
 installs prebuilt extensions quickly.
 
