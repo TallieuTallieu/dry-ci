@@ -86,6 +86,15 @@ commit_preprocessors = [
   { pattern = '^(?i:dry ?v?3)\s+', replace = "" },
   # GitHub merge commits: "Merge pull request #N from <branch>", then the title.
   { pattern = '^Merge pull request #\d+ from [^\n]*\n\s*\n', replace = "" },
+  # Release markers at the end of a title (bin/lint-pr-title checks them).
+  # [no release] is read by bin/release; here it only leaves the entry.
+  { pattern = '^([^\n]*?)\s*\[no release\]', replace = "${1}" },
+  # [major] is the same as "!". [minor] and [patch] suffix the type, so the
+  # ^type groups below still match: "fix-minor" stays a fix but bumps minor
+  # ([bump] below), "feat-patch" stays a feature but isn't "feat" to the bump.
+  { pattern = '^([a-z]+)(\([^)\n]*\))?!?: ([^\n]*?)\s*\[major\]', replace = "${1}${2}!: ${3}" },
+  { pattern = '^([a-z]+)(\([^)\n]*\))?: ([^\n]*?)\s*\[minor\]', replace = "${1}-minor${2}: ${3}" },
+  { pattern = '^([a-z]+)(\([^)\n]*\))?: ([^\n]*?)\s*\[patch\]', replace = "${1}-patch${2}: ${3}" },
 ]
 
 commit_parsers = [
@@ -113,3 +122,5 @@ commit_parsers = [
 [bump]
 features_always_bump_minor = true
 breaking_always_bump_major = true
+# Types that a [minor] marker made (see commit_preprocessors).
+custom_minor_increment_regex = '-minor$'
