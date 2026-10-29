@@ -47,6 +47,8 @@ check_prettier() {
   if [[ -f yarn.lock ]]; then
     cp yarn.lock "$tools/"
     printf 'nodeLinker: node-modules\n' > "$tools/.yarnrc.yml"
+    # Node 25 stopped bundling Corepack, and Node LTS is past it.
+    command -v corepack >/dev/null || npm install -g --no-audit --no-fund corepack
     corepack enable
     (cd "$tools" && yarn install --no-immutable --mode=skip-build)
   else
